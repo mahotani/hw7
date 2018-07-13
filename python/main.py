@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import webapp2
+import time
 
 # Reads json description of the board and provides simple interface.
 class Game:
@@ -92,7 +93,8 @@ class Game:
                 
                 # Something was captured. Move is valid.
                 new_board["Next"] = 3 - self.Next()
-		return Game(board=new_board)
+		#return Game(board=new_board)
+                return new_board
 
 # Returns piece on the board.
 # 0 for no pieces, 1 for player 1, 2 for player 2.
@@ -149,10 +151,103 @@ Paste JSON here:<p/><textarea name=json cols=80 rows=24></textarea>
         # Do the picking of a move and print the result.
         self.pickMove(g)
 
-
+        
     def pickMove(self, g):
-    	# Gets all valid moves.
-    	valid_moves = g.ValidMoves()
+        # Gets all valid moves.
+    	valid_moves = g.ValidMoves()  
+        
+        def score0(x, y):
+			scoreMatrix = [[120,-20,40,5,5,40,-20,120],
+							[-20,-40,-20,-20,-20,-20,-40,-20],
+							[40,-20,30,10,10,30,-5,40],
+							[5,-20,10,10,10,10,-5,5],
+							[5,-20,10,10,10,10,-5,5],
+							[40,-20,30,10,10,30,-5,40],
+							[-20,-40,-20,-20,-20,-20,-40,-20],
+							[120,-20,40,5,5,20,-20,120]]
+			score = scoreMatrix[x][y]
+			return score
+
+		
+        def score1(x, y):
+			scoreMatrix = [[120,-10,20,5,5,20,-10,120],
+							[-10,-20,-5,-5,-5,-5,-20,-10],
+							[20,-5,15,3,3,15,-5,20],
+							[5,-5,3,3,3,3,-5,5],
+							[5,-5,3,3,3,3,-5,5],
+							[20,-5,15,3,3,15,-5,20],
+							[-10,-20,-5,-5,-5,-5,-20,-10],
+							[120,-10,20,5,5,20,-10,120]]
+			score = scoreMatrix[x][y]
+			return score
+
+        def score2(board):
+                score = 0
+                count = 0
+
+                for y in xrange(0,8):
+                        for x in xrange(0,8):
+                                if board["Pieces"][y][x] != 0:
+                                        count += 1
+                for y in xrange(0,8):
+                        for x in xrange(0,8):
+                                if board["Pieces"][y][x] == 1:
+                                        if(count < 16):
+											score -= 2
+											score += score0(x, y)
+                                        else:
+											score += 2
+											score += score1(x, y)
+				return score
+ 
+        
+        def score3(board):
+                score = 0
+                count = 0
+
+                for y in xrange(0,8):
+                        for x in xrange(0,8):
+                                if board["Pieces"][y][x] != 0:
+                                        count += 1
+                for y in xrange(0,8):
+                        for x in xrange(0,8):
+                                if board["Pieces"][y][x] == 2:
+                                        if(count < 16):
+											score -= 2
+											score += score0(x, y)
+                                        else:
+											score += 2
+											score += score1(x, y)
+				return score
+
+        def min_max(board,depth,g,time1):#player1 gets min, player2 gets max
+                time2 = time.time()
+                if time2 - time1 > 13:#Stop min_max over 15s
+                        return "stop",{}
+                if depth < 1:#Repeat min_max until depth > 100
+		        return  score3(board) - score2(board),{}
+                #moves = checked_moves(g.ValidMoves())#Select priority center valid moves but there are no choice, select all valid moves
+                moves = g.ValidMoves()
+                best_score = 500 if board["Next"] == 1 else -500
+                best_move = {}
+    	        for i in range(len(moves)):
+                        next_board = g.NextBoardPosition(moves[i])
+                        score,move = min_max(next_board,depth-1,g,time1)
+                        if score == "stop":#timeout process
+                                best_move = {}
+                                best_score = "stop"
+                                break
+                        if board["Next"] == 1:#player1 process
+                                if score < best_score:
+                                        best_score = score
+                                        best_move = moves[i]
+                        if board["Next"] == 2:#player2 process
+                                if score > best_score:
+                                        best_score = score
+                                        best_move = moves[i]
+                return best_score,best_move 
+        
+        
     	if len(valid_moves) == 0:
     		# Passes if no valid moves.
     		self.response.write("PASS")
@@ -161,8 +256,20 @@ Paste JSON here:<p/><textarea name=json cols=80 rows=24></textarea>
                 # TO STEP STUDENTS:
                 # You'll probably want to change how this works, to do something
                 # more clever than just picking a random move.
-	    	move = random.choice(valid_moves)
-    		self.response.write(PrettyMove(move))
+	    	#move1 = random.choice(valid_moves)
+                move = []
+                time1 = time.time()
+                for i in range(1,6):
+                        (best_score, best_move) = min_max(g._board,i,g,time1)
+                        if best_move == {}:
+                                break
+                        else:
+                                move.append(best_move)
+
+                time2 = time.time()
+                
+    		self.response.write(PrettyMove(move[len(move)-1]))
+                #self.response.write(PrettyMove(best_move))
 
 app = webapp2.WSGIApplication([
     ('/', MainHandler)
